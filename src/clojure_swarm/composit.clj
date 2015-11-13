@@ -2,7 +2,7 @@
   (:require [clojure.data :refer [diff] :as data]))
 
 (comment
-  "Component lyfecycle definition"
+  "Component bundle lyfecycle definition"
   [{:name :component-name
     :constructor 'component-ns/constructor-fn
     :configurator 'component-ns/configurator-fn
@@ -22,79 +22,79 @@
   {:component-name {:lifecycle (atom {})
                     :dependencies (atom {})
                     :configuration (atom {})
-                    :reference (atom component)}})
+                    :component (atom component)}})
 
-(defn construct-component [definition]
+(defn construct-bundle [definition]
   (let [component-name (:name definition)
         constructor (resolve (:constructor definition))]
     {component-name {:lifecycle (atom (dissoc definition :name))
-                     :reference (atom (constructor))
+                     :component (atom (constructor))
                      :dependencies (atom {})
                      :configuration (atom {})}}))
 
 (defn construct-system [definitions]
-  (into {} (merge (map construct-component definitions))))
+  (into {} (merge (map construct-bundle definitions))))
 
 (defn- assoc-injection-component [system injection name binding]
-  (let [dependency (-> system name :reference)]
+  (let [dependency (-> system name :component)]
     (if dependency
       (assoc injection binding dependency)
       injection)))
 
-(defn inject-component-dependencies! [system component dependencies]
-  (locking component
+(defn inject-bundle-dependencies! [system bundle dependencies]
+  (locking bundle
     (let [injection (reduce-kv #(assoc-injection-component system %1 %2 %3) {} dependencies)
-          reference (:reference component)
-          curr-dependencies (:dependencies component)]
+          reference (:component bundle)
+          curr-dependencies (:dependencies bundle)]
       (swap! reference #(into % injection))
       (reset! curr-dependencies dependencies)
-      component)))
+      bundle)))
 
 (defn inject-system-dependencies! [system dependencies]
   (locking system
-    (doseq [[name component] system]
+    (doseq [[name bundle] system]
       (when-let [component-dependencies (name dependencies)]
-        (inject-component-dependencies! system component component-dependencies)))
+        (inject-bundle-dependencies! system bundle component-dependencies)))
     system))
 
-(defn configure-component! [component configuration]
-  (locking component
-    (let [configurator (-> component
+(defn configure-bundle! [bundle configuration]
+  (locking bundle
+    (let [configurator (-> bundle
                            :lifecycle
                            deref
                            :configurator
                            resolve)
-          reference (:reference component)
-          curr-configuration (:configuration component)]
+          reference (:component bundle)
+          curr-configuration (:configuration bundle)]
       (swap! reference #(configurator % configuration))
       (reset! curr-configuration configuration)
-      component)))
+      bundle)))
 
 (defn configure-system! [system configuration]
   (locking system
-    (doseq [[name component] system]
+    (doseq [[name bundle] system]
       (when-let [upd-configuration (name configuration)]
-        (let [curr-configuration @(:configuration component)
+        (let [curr-configuration @(:configuration bundle)
               diff-configuration (data/diff curr-configuration upd-configuration)]
           (when (or
                   (first diff-configuration)
                   (second diff-configuration))
-            (configure-component! component upd-configuration)))))
+            (configure-bundle! bundle upd-configuration)))))
     system))
 
-(defn cleanup-component! [component]
-  (locking component
-    (when-let [cleaner (-> component
+(defn cleanup-bundle! [bundle]
+  (locking bundle
+    (when-let [cleaner (-> bundle
                            :lifecycle
                            deref
                            :cleaner
                            resolve)]
-      (let [reference (:reference component)]
+      (let [reference (:component bundle)]
         (swap! reference cleaner)))
-    component))
+    bundle))
 
 (defn cleanup-system! [system]
   (locking system
-    (doseq [[_ component] system]
-      (cleanup-component! component))
+    (doseq [[_ bundle] system]
+      (cleanup-bundle! bundle))
     system))

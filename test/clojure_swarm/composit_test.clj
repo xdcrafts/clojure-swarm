@@ -45,22 +45,22 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(t/deftest construct-component-test
+(t/deftest construct-bundle-test
   (t/testing "Construction of component"
-    (let [component (construct-component service-lifecyle-definition)
-          lifecycle @(get-in component [:service :lifecycle])
-          reference @(get-in component [:service :reference])
-          dependencies @(get-in component [:service :dependencies])
-          configuration @(get-in component [:service :configuration])]
+    (let [bundle (construct-bundle service-lifecyle-definition)
+          lifecycle @(get-in bundle [:service :lifecycle])
+          reference @(get-in bundle [:service :component])
+          dependencies @(get-in bundle [:service :dependencies])
+          configuration @(get-in bundle [:service :configuration])]
       (t/is
         (and lifecycle reference dependencies configuration)
-        "Component should have lifecycle, reference, dependencies and configuration referencies")
+        "Bundle should have lifecycle, reference, dependencies and configuration referencies")
       (t/is (=
             {:constructor 'clojure-swarm.composit-test/service-constructor
              :configurator 'clojure-swarm.composit-test/service-configurator
              :cleaner 'clojure-swarm.composit-test/service-cleaner}
             lifecycle)
-            "Component should have expected lifecycle")
+            "Bundle should have expected lifecycle")
       (t/is (=
             {:enabled? true}
             reference)
@@ -69,18 +69,18 @@
 (t/deftest construct-system-test
   (t/testing "Construction of system"
     (let [system (construct-system [service-lifecyle-definition client-lifecyle-definition])]
-      (t/is (:service system) "System should have service component")
-      (t/is (:client system) "System should have client component"))))
+      (t/is (:service system) "System should have service bundle")
+      (t/is (:client system) "System should have client bundle"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(t/deftest inject-component-dependencies-test
-  (t/testing "Injection of component dependecies"
+(t/deftest inject-bundle-dependencies-test
+  (t/testing "Injection of bundle dependecies"
     (let [system (construct-system [service-lifecyle-definition client-lifecyle-definition])
-          service-component (:service system)
-          _ (inject-component-dependencies! system service-component service-dependecies)
-          dependencies @(:dependencies service-component)
-          service @(:reference service-component)]
+          service-bundle (:service system)
+          _ (inject-bundle-dependencies! system service-bundle service-dependecies)
+          dependencies @(:dependencies service-bundle)
+          service @(:component service-bundle)]
       (t/is (= service-dependecies dependencies) "Dependencies should be set.")
       (t/is (:discoverer service) "Service should have discoverer reference"))))
 
@@ -88,47 +88,47 @@
   (t/testing "Injection of system dependencies"
     (let [system (construct-system [service-lifecyle-definition client-lifecyle-definition])
           _ (inject-system-dependencies! system {:service service-dependecies})
-          service-component (:service system)
-          dependencies @(:dependencies service-component)
-          service @(:reference service-component)]
+          service-bundle (:service system)
+          dependencies @(:dependencies service-bundle)
+          service @(:component service-bundle)]
       (t/is (= service-dependecies dependencies) "Dependencies should be set.")
       (t/is (:discoverer service) "Service should have discoverer reference"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(t/deftest configure-component-test
-  (t/testing "Configuration of component"
-    (let [component (:service (construct-component service-lifecyle-definition))
-          _ (configure-component! component service-configuration)
-          curr-configuration @(:configuration component)
-          reference @(:reference component)]
+(t/deftest configure-bundle-test
+  (t/testing "Configuration of bundle"
+    (let [bundle (:service (construct-bundle service-lifecyle-definition))
+          _ (configure-bundle! bundle service-configuration)
+          curr-configuration @(:configuration bundle)
+          reference @(:component bundle)]
       (t/is (:timeout reference) "Service should have timeout key.")
       (t/is (= service-configuration curr-configuration) "Configuration should be set."))))
 
 (t/deftest configure-system-test
-  (t/testing "Configuration of component"
+  (t/testing "Configuration of system"
     (let [system (construct-system [service-lifecyle-definition client-lifecyle-definition])
           _ (configure-system! system {:service service-configuration})
-          component (:service system)
-          curr-configuration @(:configuration component)
-          reference @(:reference component)]
+          bundle (:service system)
+          curr-configuration @(:configuration bundle)
+          reference @(:component bundle)]
       (t/is (:timeout reference) "Service should have timeout key.")
       (t/is (= service-configuration curr-configuration) "Configuration should be set."))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(t/deftest cleanup-component-test
+(t/deftest cleanup-bundle-test
   (t/testing "Component cleanup"
-    (let [component (:service (construct-component service-lifecyle-definition))
-          _ (cleanup-component! component)
-          enabled? (:enabled? @(:reference component))]
+    (let [bundle (:service (construct-bundle service-lifecyle-definition))
+          _ (cleanup-bundle! bundle)
+          enabled? (:enabled? @(:component bundle))]
       (t/is (not enabled?) "Service must be disabled."))))
 
 (t/deftest cleanup-component-test
   (t/testing "Component cleanup"
     (let [system (construct-system [service-lifecyle-definition client-lifecyle-definition])
           _ (cleanup-system! system)
-          service-enabled? (:enabled? @(get-in system [:service :reference]))
-          client-enabled? (:enabled? @(get-in system [:client :reference]))]
+          service-enabled? (:enabled? @(get-in system [:service :component]))
+          client-enabled? (:enabled? @(get-in system [:client :component]))]
       (t/is (not service-enabled?) "Service must be disabled.")
       (t/is (not client-enabled?) "Client must be disabled."))))
