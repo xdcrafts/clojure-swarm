@@ -24,6 +24,8 @@
                     :configuration (atom {})
                     :component (atom component)}})
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (defn construct-bundle [definition]
   (let [component-name (:name definition)
         constructor (resolve (:constructor definition))]
@@ -34,6 +36,23 @@
 
 (defn construct-system [definitions]
   (into {} (merge (map construct-bundle definitions))))
+
+(defn reconstruct-component! [system component-name]
+  (when-let [bundle (component-name system)]
+    (locking bundle
+      (let [constructor @(:constructor bundle)
+            component (:component bundle)]
+        (swap! component (constructor))
+        bundle))))
+
+(defn update-lifecycle! [system component-name lifecycle-update]
+  (when-let [bundle (component-name system)]
+    (locking bundle
+      (when-let [lifecycle (:lifecycle bundle)]
+        (swap! lifecycle lifecycle-update)
+        bundle))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn- assoc-injection-component [system injection name binding]
   (let [dependency (-> system name :component)]
@@ -57,18 +76,20 @@
         (inject-bundle-dependencies! system bundle component-dependencies)))
     system))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (defn configure-bundle! [bundle configuration]
   (locking bundle
-    (let [configurator (-> bundle
-                           :lifecycle
-                           deref
-                           :configurator
-                           resolve)
-          reference (:component bundle)
-          curr-configuration (:configuration bundle)]
-      (swap! reference #(configurator % configuration))
-      (reset! curr-configuration configuration)
-      bundle)))
+    (when-let [configurator (-> bundle
+                                :lifecycle
+                                deref
+                                :configurator
+                                resolve)]
+      (let [reference (:component bundle)
+            curr-configuration (:configuration bundle)]
+        (swap! reference #(configurator % configuration))
+        (reset! curr-configuration configuration)
+        bundle))))
 
 (defn configure-system! [system configuration]
   (locking system
@@ -81,6 +102,8 @@
                   (second diff-configuration))
             (configure-bundle! bundle upd-configuration)))))
     system))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn cleanup-bundle! [bundle]
   (locking bundle
